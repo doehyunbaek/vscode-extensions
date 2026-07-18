@@ -76,6 +76,13 @@
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "piConfigVsync.files.focus",
+        "key": "ctrl+shift+v",
+        "mac": "cmd+shift+v"
+      }
+    ],
     "menus": {
       "view/item/context": [
         {
