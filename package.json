@@ -1,0 +1,154 @@
+{
+  "name": "pi-config-vsync",
+  "displayName": "Pi Config VSync",
+  "description": "Sync Pi keybindings and model overrides through a GitHub repository.",
+  "version": "0.1.0",
+  "publisher": "doehyunbaek",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:piConfigVsync.files",
+    "onCommand:piConfigVsync.addFile",
+    "onCommand:piConfigVsync.removeFile",
+    "onCommand:piConfigVsync.selectLocalRepository",
+    "onCommand:piConfigVsync.selectRepository",
+    "onCommand:piConfigVsync.push",
+    "onCommand:piConfigVsync.pull"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "piConfigVsync.addFile",
+        "title": "VSync: Add File",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "piConfigVsync.removeFile",
+        "title": "VSync: Remove File",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "piConfigVsync.selectLocalRepository",
+        "title": "VSync: Select Local Repository",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "piConfigVsync.selectRepository",
+        "title": "VSync: Select Remote Repository",
+        "icon": "$(repo)"
+      },
+      {
+        "command": "piConfigVsync.refreshFiles",
+        "title": "VSync: Refresh Files",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "piConfigVsync.push",
+        "title": "VSync: Push Files",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "piConfigVsync.pull",
+        "title": "VSync: Pull Files",
+        "icon": "$(cloud-download)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "piConfigVsync",
+          "title": "VSYNC",
+          "icon": "media/vsync.svg"
+        }
+      ]
+    },
+    "views": {
+      "piConfigVsync": [
+        {
+          "id": "piConfigVsync.files",
+          "name": "FILES",
+          "visibility": "visible"
+        }
+      ]
+    },
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "piConfigVsync.removeFile",
+          "when": "view == piConfigVsync.files && viewItem == vsyncFile",
+          "group": "inline"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "piConfigVsync.push",
+          "when": "view == piConfigVsync.files",
+          "group": "navigation@1"
+        },
+        {
+          "command": "piConfigVsync.pull",
+          "when": "view == piConfigVsync.files",
+          "group": "navigation@2"
+        },
+        {
+          "command": "piConfigVsync.refreshFiles",
+          "when": "view == piConfigVsync.files",
+          "group": "navigation@3"
+        },
+        {
+          "command": "piConfigVsync.selectLocalRepository",
+          "when": "view == piConfigVsync.files",
+          "group": "navigation@4"
+        },
+        {
+          "command": "piConfigVsync.selectRepository",
+          "when": "view == piConfigVsync.files",
+          "group": "navigation@5"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Pi Config VSync",
+      "properties": {
+        "piConfigVsync.local.repository": {
+          "type": "string",
+          "default": "~/.vsync",
+          "description": "Local repository whose files are synchronized recursively. Use 'VSync: Select Local Repository' to choose a folder."
+        },
+        "piConfigVsync.github.remoteRepository": {
+          "type": "string",
+          "default": "",
+          "pattern": "^[^/\\s]+/[^/\\s]+$",
+          "patternErrorMessage": "Use the owner/repository format.",
+          "description": "GitHub remote repository. Use 'VSync: Select Remote Repository' to choose one."
+        },
+        "piConfigVsync.github.branch": {
+          "type": "string",
+          "default": "main",
+          "description": "Git branch used for synchronized files. Selecting a remote repository sets this to its default branch."
+        },
+        "piConfigVsync.github.directory": {
+          "type": "string",
+          "default": "",
+          "description": "Optional directory in the GitHub remote repository. Empty means the repository root."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile",
+    "package": "npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.7.0"
+  }
+}
