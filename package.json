@@ -4,6 +4,11 @@
   "description": "Sync Pi keybindings and model overrides through a GitHub repository.",
   "version": "0.1.0",
   "publisher": "doehyunbaek",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/doehyunbaek/vsync.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
