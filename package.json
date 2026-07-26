@@ -1,5 +1,5 @@
 {
-  "name": "pi-config-vsync",
+  "name": "vsync",
   "displayName": "VSync",
   "description": "Sync Pi keybindings and model overrides through a GitHub repository.",
   "version": "0.1.0",
