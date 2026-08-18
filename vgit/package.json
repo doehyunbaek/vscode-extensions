@@ -1,0 +1,127 @@
+{
+  "name": "vgit",
+  "displayName": "VGit",
+  "description": "Browse commits from the current Git repository in the VS Code sidebar.",
+  "version": "0.2.0",
+  "publisher": "doehyunbaek",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "SCM Providers"
+  ],
+  "keywords": [
+    "git",
+    "commits",
+    "history"
+  ],
+  "activationEvents": [
+    "onView:vgit.commits",
+    "onView:vgit.fileHistory",
+    "onCommand:vgit.refresh",
+    "onCommand:vgit.openRemote",
+    "onCommand:vgit.copyHash",
+    "onCommand:vgit.copyPathWithLine",
+    "onCommand:vgit.copyRemoteFileUrl"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vgit.refresh",
+        "title": "VGit: Refresh Commits",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "vgit.openRemote",
+        "title": "VGit: Open on Remote",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "vgit.copyHash",
+        "title": "VGit: Copy Commit Hash",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "vgit.copyPathWithLine",
+        "title": "VGit: Copy Path with Line"
+      },
+      {
+        "command": "vgit.copyRemoteFileUrl",
+        "title": "VGit: Copy Remote File URL"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "vgit.copyPathWithLine",
+        "key": "ctrl+c",
+        "mac": "ctrl+c",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "vgit.copyRemoteFileUrl",
+        "key": "ctrl+alt+c",
+        "mac": "ctrl+cmd+c",
+        "when": "editorTextFocus"
+      }
+    ],
+    "views": {
+      "scm": [
+        {
+          "id": "vgit.commits",
+          "name": "Commits"
+        },
+        {
+          "id": "vgit.fileHistory",
+          "name": "File History"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "vgit.refresh",
+          "when": "view == vgit.commits || view == vgit.fileHistory",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "vgit.openRemote",
+          "when": "view == vgit.commits && viewItem == vgit.commit || view == vgit.fileHistory && viewItem == vgit.fileCommit",
+          "group": "inline"
+        },
+        {
+          "command": "vgit.copyHash",
+          "when": "view == vgit.commits && viewItem == vgit.commit || view == vgit.fileHistory && viewItem == vgit.fileCommit",
+          "group": "inline"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "VGit",
+      "properties": {
+        "vgit.maxCommits": {
+          "type": "number",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Maximum number of commits shown in the sidebar."
+        },
+        "vgit.showAllBranches": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show commits from all local and remote branches."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "check": "node --check extension.js",
+    "package": "npx --yes @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0"
+  }
+}
