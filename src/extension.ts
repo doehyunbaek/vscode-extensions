@@ -19,6 +19,19 @@ type GitHubRepository = {
   private: boolean;
 };
 
+type GitReference = {
+  object: { sha: string };
+};
+
+type GitCommit = {
+  sha: string;
+  tree: { sha: string };
+};
+
+type GitObject = {
+  sha: string;
+};
+
 type RemoteRepository = {
   owner: string;
   repository: string;
@@ -323,9 +336,58 @@ async function requireRemoteRepository(): Promise<RemoteRepository | undefined> 
   return choice === "Select Repository" ? selectRemoteRepository() : undefined;
 }
 
+function repositoryEndpoint(remoteRepository: RemoteRepository): string {
+  return `/repos/${encodeURIComponent(remoteRepository.owner)}/${encodeURIComponent(remoteRepository.repository)}`;
+}
+
 function contentEndpoint(relativePath: string, remoteRepository: RemoteRepository): string {
   const encodedPath = remotePath(relativePath, remoteRepository).split("/").filter(Boolean).map(encodeURIComponent).join("/");
-  return `/repos/${encodeURIComponent(remoteRepository.owner)}/${encodeURIComponent(remoteRepository.repository)}/contents/${encodedPath}`;
+  return `${repositoryEndpoint(remoteRepository)}/contents/${encodedPath}`;
+}
+
+async function commitFiles(
+  files: Array<{ path: string; bytes: Uint8Array }>,
+  accessToken: string,
+  remoteRepository: RemoteRepository,
+): Promise<boolean> {
+  const repository = repositoryEndpoint(remoteRepository);
+  const encodedBranch = remoteRepository.branch.split("/").map(encodeURIComponent).join("/");
+  const referencePath = `${repository}/git/ref/heads/${encodedBranch}`;
+  const reference = await githubRequest<GitReference>(referencePath, accessToken);
+  const parent = await githubRequest<GitCommit>(`${repository}/git/commits/${reference.object.sha}`, accessToken);
+  const treeEntries: Array<{ path: string; mode: "100644"; type: "blob"; sha: string }> = [];
+
+  for (const file of files) {
+    const blob = await githubRequest<GitObject>(`${repository}/git/blobs`, accessToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: Buffer.from(file.bytes).toString("base64"), encoding: "base64" }),
+    });
+    treeEntries.push({ path: remotePath(file.path, remoteRepository), mode: "100644", type: "blob", sha: blob.sha });
+  }
+
+  const tree = await githubRequest<GitObject>(`${repository}/git/trees`, accessToken, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_tree: parent.tree.sha, tree: treeEntries }),
+  });
+  if (tree.sha === parent.tree.sha) return false;
+
+  const commit = await githubRequest<GitObject>(`${repository}/git/commits`, accessToken, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: `VSync ${files.length} file${files.length === 1 ? "" : "s"}`,
+      tree: tree.sha,
+      parents: [parent.sha],
+    }),
+  });
+  await githubRequest<GitReference>(`${repository}/git/refs/heads/${encodedBranch}`, accessToken, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sha: commit.sha }),
+  });
+  return true;
 }
 
 async function getRemote(
@@ -371,6 +433,7 @@ async function push(): Promise<void> {
   const files = await listLocalFiles();
   if (files.length === 0) throw new Error(`Local repository ${localRepositoryPath()} contains no files.`);
   const accessToken = await token();
+  const pending: Array<{ path: string; bytes: Uint8Array }> = [];
 
   for (const file of files) {
     const mirror = localUri(file);
@@ -383,22 +446,15 @@ async function push(): Promise<void> {
       if (!(error instanceof vscode.FileSystemError && error.code === "FileNotFound")) throw error;
       bytes = await vscode.workspace.fs.readFile(mirror);
     }
-    const remote = await getRemote(file, accessToken, remoteRepository);
-    const existing = Array.isArray(remote) ? undefined : remote;
-    await githubRequest(contentEndpoint(file, remoteRepository), accessToken, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: `VSync ${file}`,
-        branch: remoteRepository.branch,
-        content: Buffer.from(bytes).toString("base64"),
-        ...(existing?.sha ? { sha: existing.sha } : {}),
-      }),
-    });
+    pending.push({ path: file, bytes });
   }
 
+  const committed = await commitFiles(pending, accessToken, remoteRepository);
   filesProvider?.refresh();
-  void vscode.window.showInformationMessage(`Pushed ${files.length} file(s) to ${remoteRepository.owner}/${remoteRepository.repository}.`);
+  const message = committed
+    ? `Pushed ${files.length} file(s) to ${remoteRepository.owner}/${remoteRepository.repository} in one commit.`
+    : `${remoteRepository.owner}/${remoteRepository.repository} is already up to date.`;
+  void vscode.window.showInformationMessage(message);
 }
 
 async function pull(): Promise<void> {

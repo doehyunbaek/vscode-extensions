@@ -31,7 +31,7 @@ The extension authenticates through VS Code's built-in GitHub authentication pro
 ## Behavior
 
 - **Add File** copies the active file into the local repository at its home-relative path.
-- **Push Files** refreshes each mirrored file from its home location when available, then uploads it.
+- **Push Files** refreshes each mirrored file from its home location when available, then uploads all changes in a single Git commit.
 - **Pull Files** downloads each remote file into the local mirror and restores it to the corresponding path under your home directory.
 - **Remove File** deletes the mirror and remote copy but leaves the original home file untouched.
 - Files outside your home directory cannot be added because they do not have a safe home-relative destination.
