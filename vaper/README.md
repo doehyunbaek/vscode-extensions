@@ -1,4 +1,4 @@
-# Vaper
+# vaper
 
 A minimal PDF viewer for Visual Studio Code. Open any `.pdf` file normally, or run **Vaper: Open PDF** from the Command Palette.
 
