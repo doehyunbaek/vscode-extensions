@@ -2,6 +2,7 @@
 
 Monorepo for the following VS Code extensions:
 
+- [`vaper`](./vaper) — view PDF files in an editor tab
 - [`vgit`](./vgit) — browse Git history in the VS Code sidebar
 - [`vsync`](./vsync) — synchronize Pi configuration through GitHub
 
@@ -19,4 +20,4 @@ Check both extensions:
 npm run check
 ```
 
-Package an extension with `npm run package:vgit` or `npm run package:vsync`.
+Package an extension with `npm run package:vaper`, `npm run package:vgit`, or `npm run package:vsync`.

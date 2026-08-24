@@ -1,0 +1,59 @@
+{
+  "name": "vaper",
+  "displayName": "Vaper",
+  "description": "A minimal PDF viewer for Visual Studio Code, powered by PDF.js.",
+  "version": "0.1.0",
+  "publisher": "doehyunbaek",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/doehyunbaek/vscode-extensions.git",
+    "directory": "vaper"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "pdf",
+    "viewer",
+    "pdfjs"
+  ],
+  "activationEvents": [
+    "onCustomEditor:vaper.pdfViewer",
+    "onCommand:vaper.openPdf"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vaper.openPdf",
+        "title": "Vaper: Open PDF"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "vaper.pdfViewer",
+        "displayName": "Vaper PDF Viewer",
+        "selector": [
+          {
+            "filenamePattern": "*.pdf"
+          }
+        ],
+        "priority": "default"
+      }
+    ]
+  },
+  "scripts": {
+    "check": "node --check extension.js && node --check media/viewer.js",
+    "package": "node scripts/package.js"
+  },
+  "dependencies": {
+    "pdfjs-dist": "6.2.108"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0"
+  }
+}

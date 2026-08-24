@@ -2,12 +2,14 @@
   "name": "vscode-extensions",
   "private": true,
   "workspaces": [
+    "vaper",
     "vgit",
     "vsync"
   ],
   "scripts": {
-    "check": "npm run check --workspace=doehyunbaek-vgit && npm run compile --workspace=doehyunbaek-vsync",
-    "package:vgit": "npm run package --workspace=doehyunbaek-vgit",
-    "package:vsync": "npm run package --workspace=doehyunbaek-vsync"
+    "check": "npm run check --workspace=vaper && npm run check --workspace=vgit && npm run compile --workspace=vsync",
+    "package:vaper": "npm run package --workspace=vaper",
+    "package:vgit": "npm run package --workspace=vgit",
+    "package:vsync": "npm run package --workspace=vsync"
   }
 }
