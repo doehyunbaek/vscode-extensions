@@ -25,8 +25,8 @@ class PdfViewerProvider {
     const webview = panel.webview;
     const extensionUri = this.context.extensionUri;
     const mediaRoot = vscode.Uri.joinPath(extensionUri, 'media');
-    const pdfjsEntry = require.resolve('pdfjs-dist/build/pdf.mjs');
-    const pdfjsRoot = vscode.Uri.file(path.dirname(path.dirname(pdfjsEntry)));
+    const pdfjsEntry = require.resolve('pdfjs-dist/legacy/build/pdf.mjs');
+    const pdfjsRoot = vscode.Uri.file(path.resolve(path.dirname(pdfjsEntry), '..', '..'));
     const name = document.uri.path.split('/').pop() || document.uri.toString();
 
     webview.options = {
@@ -65,8 +65,8 @@ class PdfViewerProvider {
     const mediaUri = vscode.Uri.joinPath(this.context.extensionUri, 'media');
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaUri, 'viewer.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaUri, 'viewer.css'));
-    const pdfjsUri = webview.asWebviewUri(vscode.Uri.joinPath(pdfjsRoot, 'build', 'pdf.mjs'));
-    const workerUri = webview.asWebviewUri(vscode.Uri.joinPath(pdfjsRoot, 'build', 'pdf.worker.mjs'));
+    const pdfjsUri = webview.asWebviewUri(vscode.Uri.joinPath(pdfjsRoot, 'legacy', 'build', 'pdf.mjs'));
+    const workerUri = webview.asWebviewUri(vscode.Uri.joinPath(pdfjsRoot, 'legacy', 'build', 'pdf.worker.mjs'));
     const cmapsUri = directoryWebviewUri(webview, vscode.Uri.joinPath(pdfjsRoot, 'cmaps'));
     const fontsUri = directoryWebviewUri(webview, vscode.Uri.joinPath(pdfjsRoot, 'standard_fonts'));
     const wasmUri = directoryWebviewUri(webview, vscode.Uri.joinPath(pdfjsRoot, 'wasm'));
