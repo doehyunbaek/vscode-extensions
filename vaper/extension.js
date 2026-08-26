@@ -96,8 +96,14 @@ class PdfViewerProvider {
     <span class="separator"></span>
     <button id="rotate" title="Rotate clockwise" aria-label="Rotate clockwise">↻</button>
     <button id="reload" title="Reload PDF" aria-label="Reload PDF">↺</button>
-    <span id="timing" role="status" title="PDF loading time"></span>
   </header>
+  <div id="find-bar" role="search" hidden>
+    <input id="find-input" type="search" placeholder="Find in PDF" aria-label="Find in PDF" autocomplete="off" spellcheck="false">
+    <span id="find-count" aria-live="polite"></span>
+    <button id="find-previous" title="Previous match" aria-label="Previous match">↑</button>
+    <button id="find-next" title="Next match" aria-label="Next match">↓</button>
+    <button id="find-close" title="Close search" aria-label="Close search">×</button>
+  </div>
   <main id="viewport">
     <div id="message" role="status">Loading PDF…</div>
     <div id="page-container">

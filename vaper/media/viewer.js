@@ -15,7 +15,12 @@ const elements = {
   zoomLabel: document.getElementById('zoom-label'),
   rotate: document.getElementById('rotate'),
   reload: document.getElementById('reload'),
-  timing: document.getElementById('timing')
+  findBar: document.getElementById('find-bar'),
+  findInput: document.getElementById('find-input'),
+  findCount: document.getElementById('find-count'),
+  findPrevious: document.getElementById('find-previous'),
+  findNext: document.getElementById('find-next'),
+  findClose: document.getElementById('find-close')
 };
 
 const vscode = acquireVsCodeApi();
@@ -27,11 +32,18 @@ let renderTask;
 let textLayer;
 let renderSequence = 0;
 const citationCache = new Map();
+const pageTextCache = new Map();
+let findResults = [];
+let findIndex = -1;
+let findRequest = 0;
+let findTimer;
 let dataRequestId = 0;
 let pageNumber = Math.max(1, saved.page || 1);
 let scale = saved.scale || 'fit';
 let lastActualScale = 1;
 let rotation = saved.rotation || 0;
+const backHistory = [];
+const forwardHistory = [];
 
 async function main() {
   const importStarted = performance.now();
@@ -85,6 +97,9 @@ async function loadDocument(pdfjsMs = 0) {
       enableScripting: false
     });
     documentHandle = await loadingTask.promise;
+    pageTextCache.clear();
+    findResults = [];
+    findIndex = -1;
     const parseMs = performance.now() - parseStarted;
     pageNumber = Math.min(pageNumber, documentHandle.numPages);
     elements.page.max = String(documentHandle.numPages);
@@ -205,9 +220,10 @@ async function renderInteractiveLayers(page, viewport, sequence) {
   });
   await textLayer.render();
   if (sequence !== renderSequence) return;
+  highlightFindMatches();
 
   pdfjs.setLayerDimensions(elements.linkLayer, viewport);
-  for (const annotation of annotations) {
+  for (const annotation of mergeCitationLinks(annotations)) {
     if (annotation.subtype !== 'Link') continue;
     const [x1, y1] = viewport.convertToViewportPoint(annotation.rect[0], annotation.rect[1]);
     const [x2, y2] = viewport.convertToViewportPoint(annotation.rect[2], annotation.rect[3]);
@@ -245,11 +261,51 @@ async function renderInteractiveLayers(page, viewport, sequence) {
   }
 }
 
+function mergeCitationLinks(annotations) {
+  const merged = [];
+  for (const annotation of annotations) {
+    const previous = merged.at(-1);
+    const sameCitation = typeof annotation.dest === 'string' &&
+      annotation.dest.startsWith('cite.') &&
+      previous?.dest === annotation.dest;
+    const sameLine = sameCitation &&
+      Math.min(previous.rect[3], annotation.rect[3]) >= Math.max(previous.rect[1], annotation.rect[1]) - 1;
+    const horizontalGap = sameLine
+      ? Math.max(annotation.rect[0] - previous.rect[2], previous.rect[0] - annotation.rect[2], 0)
+      : Infinity;
+
+    if (horizontalGap <= 12) {
+      previous.rect = [
+        Math.min(previous.rect[0], annotation.rect[0]),
+        Math.min(previous.rect[1], annotation.rect[1]),
+        Math.max(previous.rect[2], annotation.rect[2]),
+        Math.max(previous.rect[3], annotation.rect[3])
+      ];
+    } else {
+      merged.push({ ...annotation, rect: [...annotation.rect] });
+    }
+  }
+  return merged;
+}
+
 async function navigateToDestination(destination) {
   const explicit = typeof destination === 'string' ? await documentHandle.getDestination(destination) : destination;
   if (!explicit) return;
   const target = await documentHandle.getPageIndex(explicit[0]) + 1;
+  if (target !== pageNumber) {
+    backHistory.push(pageNumber);
+    forwardHistory.length = 0;
+  }
   goToPage(target);
+}
+
+function navigateHistory(direction) {
+  const source = direction < 0 ? backHistory : forwardHistory;
+  const destination = source.pop();
+  if (!destination) return;
+  const target = direction < 0 ? forwardHistory : backHistory;
+  target.push(pageNumber);
+  goToPage(destination);
 }
 
 async function showCitationTooltip(destination, anchor) {
@@ -336,6 +392,95 @@ async function extractCitation(destination) {
     .trim();
 }
 
+function openFind() {
+  elements.findBar.hidden = false;
+  elements.findInput.focus();
+  elements.findInput.select();
+}
+
+function closeFind() {
+  elements.findBar.hidden = true;
+  elements.findInput.blur();
+  clearFindHighlights();
+}
+
+async function runFind() {
+  const request = ++findRequest;
+  const query = elements.findInput.value.trim().toLocaleLowerCase();
+  findResults = [];
+  findIndex = -1;
+  if (!query || !documentHandle) {
+    updateFindCount();
+    clearFindHighlights();
+    return;
+  }
+
+  elements.findCount.textContent = 'Searching…';
+  for (let number = 1; number <= documentHandle.numPages; number += 1) {
+    const text = await getPageText(number);
+    if (request !== findRequest) return;
+    let offset = 0;
+    while ((offset = text.indexOf(query, offset)) !== -1) {
+      findResults.push({ page: number, offset });
+      offset += Math.max(1, query.length);
+    }
+  }
+  if (request !== findRequest) return;
+  findIndex = findResults.findIndex(result => result.page >= pageNumber);
+  if (findIndex < 0 && findResults.length) findIndex = 0;
+  updateFindCount();
+  if (findIndex >= 0) goToPage(findResults[findIndex].page);
+  highlightFindMatches();
+}
+
+async function getPageText(number) {
+  if (!pageTextCache.has(number)) {
+    pageTextCache.set(number, (async () => {
+      const page = await documentHandle.getPage(number);
+      const content = await page.getTextContent();
+      return content.items.map(item => item.str || '').join(' ').toLocaleLowerCase();
+    })());
+  }
+  return pageTextCache.get(number);
+}
+
+function moveFind(direction) {
+  if (!findResults.length) return;
+  findIndex = (findIndex + direction + findResults.length) % findResults.length;
+  updateFindCount();
+  const result = findResults[findIndex];
+  if (result.page !== pageNumber) goToPage(result.page);
+  else highlightFindMatches();
+}
+
+function updateFindCount() {
+  elements.findCount.textContent = !elements.findInput.value.trim()
+    ? ''
+    : findResults.length ? `${findIndex + 1} / ${findResults.length}` : 'No results';
+  elements.findPrevious.disabled = !findResults.length;
+  elements.findNext.disabled = !findResults.length;
+}
+
+function clearFindHighlights() {
+  for (const span of elements.textLayer.querySelectorAll('.find-match, .find-current')) {
+    span.classList.remove('find-match', 'find-current');
+  }
+}
+
+function highlightFindMatches() {
+  clearFindHighlights();
+  if (elements.findBar.hidden) return;
+  const query = elements.findInput.value.trim().toLocaleLowerCase();
+  if (!query || !textLayer) return;
+  const spans = [...elements.textLayer.querySelectorAll('span')];
+  const matching = spans.filter(span => span.textContent.toLocaleLowerCase().includes(query));
+  for (const span of matching) span.classList.add('find-match');
+  if (findIndex >= 0 && findResults[findIndex]?.page === pageNumber) {
+    const pageResults = findResults.slice(0, findIndex + 1).filter(result => result.page === pageNumber);
+    matching[Math.max(0, pageResults.length - 1)]?.classList.add('find-current');
+  }
+}
+
 function fitScale(viewport) {
   const padding = 48;
   const width = Math.max(100, elements.viewport.clientWidth - padding);
@@ -391,10 +536,7 @@ function showError(error) {
   vscode.postMessage({ type: 'timing', message });
 }
 
-function setTiming(text) {
-  elements.timing.textContent = text;
-  elements.timing.title = text;
-}
+function setTiming(_text) {}
 
 function formatDuration(milliseconds) {
   return milliseconds < 1000 ? `${Math.round(milliseconds)} ms` : `${(milliseconds / 1000).toFixed(1)} s`;
@@ -415,9 +557,49 @@ function bindControls() {
     void renderPage().catch(showError);
   });
   elements.reload.addEventListener('click', () => void loadDocument().catch(showError));
+  elements.findInput.addEventListener('input', () => {
+    clearTimeout(findTimer);
+    findTimer = setTimeout(() => void runFind().catch(showError), 200);
+  });
+  elements.findInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      moveFind(event.shiftKey ? -1 : 1);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      closeFind();
+    }
+  });
+  elements.findPrevious.addEventListener('click', () => moveFind(-1));
+  elements.findNext.addEventListener('click', () => moveFind(1));
+  elements.findClose.addEventListener('click', closeFind);
 
   window.addEventListener('keydown', event => {
-    if (event.target === elements.page) return;
+    if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'f') {
+      event.preventDefault();
+      event.stopPropagation();
+      openFind();
+      return;
+    }
+    if (event.key === 'Escape' && !elements.findBar.hidden) {
+      event.preventDefault();
+      closeFind();
+      return;
+    }
+    if (event.target === elements.page || event.target === elements.findInput) return;
+    const historyModifier = event.metaKey || event.altKey;
+    if (historyModifier && event.key === 'ArrowLeft') {
+      event.preventDefault();
+      event.stopPropagation();
+      navigateHistory(-1);
+      return;
+    }
+    if (historyModifier && event.key === 'ArrowRight') {
+      event.preventDefault();
+      event.stopPropagation();
+      navigateHistory(1);
+      return;
+    }
     if (event.key === 'PageDown' || event.key === 'ArrowRight') goToPage(pageNumber + 1);
     if (event.key === 'PageUp' || event.key === 'ArrowLeft') goToPage(pageNumber - 1);
     if (event.key === 'Home') goToPage(1);
