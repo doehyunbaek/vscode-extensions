@@ -7,6 +7,8 @@ A minimal PDF viewer for Visual Studio Code. Open any `.pdf` file normally, or r
 - Opens PDFs in an editor tab
 - Page navigation and keyboard navigation
 - Fit-to-window and zoom controls
+- Selectable, copyable PDF text
+- Citation previews on hover for PDFs with linked bibliography entries
 - Page rotation and reload
 - Restores page, zoom, and rotation per editor
 

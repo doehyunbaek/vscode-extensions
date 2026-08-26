@@ -100,7 +100,12 @@ class PdfViewerProvider {
   </header>
   <main id="viewport">
     <div id="message" role="status">Loading PDF…</div>
-    <canvas id="page-canvas" aria-label="PDF page"></canvas>
+    <div id="page-container">
+      <canvas id="page-canvas" aria-label="PDF page"></canvas>
+      <div id="text-layer" class="textLayer"></div>
+      <div id="link-layer" aria-label="PDF links"></div>
+    </div>
+    <div id="citation-tooltip" role="tooltip" hidden></div>
   </main>
   <script nonce="${nonce}" type="module" src="${scriptUri}"></script>
 </body>

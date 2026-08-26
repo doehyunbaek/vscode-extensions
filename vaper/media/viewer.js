@@ -1,6 +1,10 @@
 const elements = {
   viewport: document.getElementById('viewport'),
+  pageContainer: document.getElementById('page-container'),
   canvas: document.getElementById('page-canvas'),
+  textLayer: document.getElementById('text-layer'),
+  linkLayer: document.getElementById('link-layer'),
+  citationTooltip: document.getElementById('citation-tooltip'),
   message: document.getElementById('message'),
   previous: document.getElementById('previous'),
   next: document.getElementById('next'),
@@ -20,7 +24,9 @@ let pdfjs;
 let loadingTask;
 let documentHandle;
 let renderTask;
+let textLayer;
 let renderSequence = 0;
+const citationCache = new Map();
 let dataRequestId = 0;
 let pageNumber = Math.max(1, saved.page || 1);
 let scale = saved.scale || 'fit';
@@ -132,6 +138,11 @@ async function renderPage() {
     renderTask.cancel();
     renderTask = undefined;
   }
+  if (textLayer) {
+    textLayer.cancel();
+    textLayer = undefined;
+  }
+  hideCitationTooltip();
 
   showMessage(`Loading page ${pageNumber}…`);
   const page = await documentHandle.getPage(pageNumber);
@@ -147,8 +158,17 @@ async function renderPage() {
 
   canvas.width = Math.floor(viewport.width * pixelRatio);
   canvas.height = Math.floor(viewport.height * pixelRatio);
-  canvas.style.width = `${Math.floor(viewport.width)}px`;
-  canvas.style.height = `${Math.floor(viewport.height)}px`;
+  const cssWidth = Math.floor(viewport.width);
+  const cssHeight = Math.floor(viewport.height);
+  canvas.style.width = `${cssWidth}px`;
+  canvas.style.height = `${cssHeight}px`;
+  elements.pageContainer.style.width = `${cssWidth}px`;
+  elements.pageContainer.style.height = `${cssHeight}px`;
+  elements.pageContainer.style.setProperty('--total-scale-factor', actualScale);
+  elements.pageContainer.style.setProperty('--scale-round-x', '1px');
+  elements.pageContainer.style.setProperty('--scale-round-y', '1px');
+  elements.textLayer.replaceChildren();
+  elements.linkLayer.replaceChildren();
 
   renderTask = page.render({
     canvasContext: context,
@@ -159,6 +179,8 @@ async function renderPage() {
   try {
     await renderTask.promise;
     if (sequence !== renderSequence) return;
+    await renderInteractiveLayers(page, viewport, sequence);
+    if (sequence !== renderSequence) return;
     hideMessage();
     updateControls(actualScale);
     saveState();
@@ -167,6 +189,151 @@ async function renderPage() {
   } finally {
     if (sequence === renderSequence) renderTask = undefined;
   }
+}
+
+async function renderInteractiveLayers(page, viewport, sequence) {
+  const [textContent, annotations] = await Promise.all([
+    page.getTextContent(),
+    page.getAnnotations({ intent: 'display' })
+  ]);
+  if (sequence !== renderSequence) return;
+
+  textLayer = new pdfjs.TextLayer({
+    textContentSource: textContent,
+    container: elements.textLayer,
+    viewport
+  });
+  await textLayer.render();
+  if (sequence !== renderSequence) return;
+
+  pdfjs.setLayerDimensions(elements.linkLayer, viewport);
+  for (const annotation of annotations) {
+    if (annotation.subtype !== 'Link') continue;
+    const [x1, y1] = viewport.convertToViewportPoint(annotation.rect[0], annotation.rect[1]);
+    const [x2, y2] = viewport.convertToViewportPoint(annotation.rect[2], annotation.rect[3]);
+    const rect = [x1, y1, x2, y2];
+    const link = document.createElement('a');
+    link.className = 'pdf-link';
+    link.style.left = `${Math.min(rect[0], rect[2])}px`;
+    link.style.top = `${Math.min(rect[1], rect[3])}px`;
+    link.style.width = `${Math.abs(rect[2] - rect[0])}px`;
+    link.style.height = `${Math.abs(rect[3] - rect[1])}px`;
+
+    if (annotation.dest) {
+      link.href = '#';
+      link.dataset.destination = typeof annotation.dest === 'string' ? annotation.dest : '';
+      link.addEventListener('click', event => {
+        event.preventDefault();
+        void navigateToDestination(annotation.dest);
+      });
+      if (typeof annotation.dest === 'string' && annotation.dest.startsWith('cite.')) {
+        link.classList.add('citation-link');
+        link.setAttribute('aria-describedby', 'citation-tooltip');
+        link.addEventListener('mouseenter', event => void showCitationTooltip(annotation.dest, event.currentTarget));
+        link.addEventListener('focus', event => void showCitationTooltip(annotation.dest, event.currentTarget));
+        link.addEventListener('mouseleave', hideCitationTooltip);
+        link.addEventListener('blur', hideCitationTooltip);
+      }
+    } else if (annotation.url) {
+      link.href = annotation.url;
+      link.target = '_blank';
+      link.rel = 'noreferrer';
+    } else {
+      continue;
+    }
+    elements.linkLayer.append(link);
+  }
+}
+
+async function navigateToDestination(destination) {
+  const explicit = typeof destination === 'string' ? await documentHandle.getDestination(destination) : destination;
+  if (!explicit) return;
+  const target = await documentHandle.getPageIndex(explicit[0]) + 1;
+  goToPage(target);
+}
+
+async function showCitationTooltip(destination, anchor) {
+  const tooltip = elements.citationTooltip;
+  tooltip.textContent = 'Loading reference…';
+  tooltip.hidden = false;
+  positionTooltip(anchor);
+  try {
+    const citation = await getCitation(destination);
+    if (anchor.matches(':hover, :focus')) {
+      tooltip.textContent = citation || destination.slice(5);
+      positionTooltip(anchor);
+    }
+  } catch (error) {
+    console.warn('Unable to load citation', error);
+    tooltip.textContent = destination.slice(5);
+  }
+}
+
+function hideCitationTooltip() {
+  elements.citationTooltip.hidden = true;
+}
+
+function positionTooltip(anchor) {
+  const viewportRect = elements.viewport.getBoundingClientRect();
+  const anchorRect = anchor.getBoundingClientRect();
+  const tooltip = elements.citationTooltip;
+  const margin = 8;
+  let left = anchorRect.left - viewportRect.left;
+  let top = anchorRect.bottom - viewportRect.top + margin;
+  left = Math.max(margin, Math.min(left, elements.viewport.clientWidth - tooltip.offsetWidth - margin));
+  if (top + tooltip.offsetHeight > elements.viewport.clientHeight - margin) {
+    top = anchorRect.top - viewportRect.top - tooltip.offsetHeight - margin;
+  }
+  tooltip.style.left = `${left + elements.viewport.scrollLeft}px`;
+  tooltip.style.top = `${Math.max(margin, top) + elements.viewport.scrollTop}px`;
+}
+
+async function getCitation(destination) {
+  if (!citationCache.has(destination)) {
+    citationCache.set(destination, extractCitation(destination));
+  }
+  return citationCache.get(destination);
+}
+
+async function extractCitation(destination) {
+  const explicit = await documentHandle.getDestination(destination);
+  if (!explicit) return '';
+  const pageIndex = await documentHandle.getPageIndex(explicit[0]);
+  const page = await documentHandle.getPage(pageIndex + 1);
+  const content = await page.getTextContent();
+  const targetX = Number(explicit[2]) || 0;
+  const targetY = Number(explicit[3]) || 0;
+  const items = content.items.filter(item => item.str?.trim()).map(item => ({
+    text: item.str.trim(),
+    x: item.transform[4],
+    y: item.transform[5]
+  }));
+  if (!items.length) return '';
+
+  // LaTeX bibliography destinations sit just above the first reference line.
+  // Prefer the closest text below that point so the preceding entry is omitted.
+  const belowDestination = items.filter(item => item.y <= targetY + 1);
+  const candidates = belowDestination.length ? belowDestination : items;
+  const start = candidates.reduce((best, item) => {
+    const score = Math.abs(item.y - targetY) * 8 + Math.abs(item.x - targetX);
+    return !best || score < best.score ? { item, score } : best;
+  }, null).item;
+  const columnLeft = start.x < page.view[2] / 2 ? 0 : page.view[2] / 2;
+  const columnRight = columnLeft + page.view[2] / 2;
+  const lines = new Map();
+  for (const item of items) {
+    if (item.x < columnLeft || item.x >= columnRight || item.y > start.y + 3 || item.y < start.y - 48) continue;
+    const key = Math.round(item.y);
+    if (!lines.has(key)) lines.set(key, []);
+    lines.get(key).push(item);
+  }
+  return [...lines.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .map(([, line]) => line.sort((a, b) => a.x - b.x).map(item => item.text).join(' '))
+    .join(' ')
+    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/-\s+/g, '')
+    .trim();
 }
 
 function fitScale(viewport) {
