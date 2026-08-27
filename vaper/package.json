@@ -2,7 +2,7 @@
   "name": "vaper",
   "displayName": "vaper",
   "description": "A minimal PDF viewer for Visual Studio Code, powered by PDF.js.",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "publisher": "doehyunbaek",
   "license": "MIT",
   "repository": {
