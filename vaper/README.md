@@ -1,9 +1,10 @@
 # vaper
 
-A minimal PDF viewer for Visual Studio Code. Open any `.pdf` file normally, or run **Vaper: Open PDF** from the Command Palette.
+A minimal PDF viewer for Visual Studio Code. Open any `.pdf` file normally, run **Vaper: Open PDF**, or search arXiv from the Command Palette.
 
 ## Features
 
+- Searches arXiv with **Vaper: Search arXiv for Paper**, using DBLP's fast CoRR index, and shows recently opened papers
 - Opens PDFs in an editor tab
 - Page navigation and keyboard navigation
 - Fit-to-window and zoom controls

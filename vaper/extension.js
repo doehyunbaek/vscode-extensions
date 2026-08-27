@@ -1,7 +1,15 @@
 const path = require('path');
 const vscode = require('vscode');
+const {
+  ARXIV_USER_AGENT,
+  addRecentPaper,
+  attachSearchPicker,
+  normalizeRecentPapers,
+  searchDblpForArxiv
+} = require('./paper-search');
 
 const VIEW_TYPE = 'vaper.pdfViewer';
+const RECENT_PAPERS_KEY = 'vaper.recentArxivPapers';
 
 class PdfDocument {
   constructor(uri) {
@@ -141,6 +149,60 @@ function getNonce() {
   return Array.from({ length: 32 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
 }
 
+async function openArxivPaper(context, paper, signal) {
+  const storage = vscode.Uri.joinPath(context.globalStorageUri, 'arxiv');
+  const fileName = `${paper.id.replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf`;
+  const uri = vscode.Uri.joinPath(storage, fileName);
+
+  try {
+    await vscode.workspace.fs.stat(uri);
+  } catch {
+    const response = await fetch(`https://arxiv.org/pdf/${paper.id}`, {
+      signal,
+      headers: { 'User-Agent': ARXIV_USER_AGENT, Accept: 'application/pdf' }
+    });
+    if (!response.ok) throw new Error(`PDF download returned HTTP ${response.status}`);
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.toLowerCase().includes('pdf')) throw new Error('arXiv did not return a PDF');
+    await vscode.workspace.fs.createDirectory(storage);
+    await vscode.workspace.fs.writeFile(uri, new Uint8Array(await response.arrayBuffer()));
+  }
+
+  await vscode.commands.executeCommand('vscode.openWith', uri, VIEW_TYPE);
+}
+
+async function runPaperSearch(context, output) {
+  const picker = vscode.window.createQuickPick();
+  picker.title = 'Search arXiv for Paper';
+  const recentPapers = normalizeRecentPapers(context.globalState.get(RECENT_PAPERS_KEY));
+  picker.placeholder = recentPapers.length
+    ? 'Recently opened papers — type to search arXiv'
+    : 'Type a query to search arXiv';
+  picker.matchOnDescription = true;
+  picker.matchOnDetail = true;
+  picker.ignoreFocusOut = true;
+  const selected = await attachSearchPicker(
+    picker,
+    (query, signal) => searchDblpForArxiv(query, {
+      signal,
+      log: message => output.appendLine(`[arXiv search] ${message}`)
+    }),
+    { initialPapers: recentPapers }
+  );
+  if (!selected) return;
+
+  await vscode.window.withProgress({
+    location: vscode.ProgressLocation.Notification,
+    title: `Opening “${selected.title}”…`,
+    cancellable: true
+  }, async (_progress, token) => {
+    const controller = new AbortController();
+    token.onCancellationRequested(() => controller.abort());
+    await openArxivPaper(context, selected, controller.signal);
+  });
+  await context.globalState.update(RECENT_PAPERS_KEY, addRecentPaper(recentPapers, selected));
+}
+
 function activate(context) {
   const output = vscode.window.createOutputChannel('Vaper');
   const provider = new PdfViewerProvider(context, output);
@@ -158,6 +220,15 @@ function activate(context) {
       });
       if (selected?.[0]) {
         await vscode.commands.executeCommand('vscode.openWith', selected[0], VIEW_TYPE);
+      }
+    }),
+    vscode.commands.registerCommand('vaper.searchArxiv', async () => {
+      try {
+        await runPaperSearch(context, output);
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          void vscode.window.showErrorMessage(`Unable to search arXiv: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
     })
   );

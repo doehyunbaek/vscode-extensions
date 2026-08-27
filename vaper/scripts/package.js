@@ -12,6 +12,7 @@ const included = [
   'LICENSE',
   'README.md',
   'extension.js',
+  'paper-search.js',
   'media',
   'package.json'
 ];

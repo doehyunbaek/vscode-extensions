@@ -23,7 +23,8 @@
   ],
   "activationEvents": [
     "onCustomEditor:vaper.pdfViewer",
-    "onCommand:vaper.openPdf"
+    "onCommand:vaper.openPdf",
+    "onCommand:vaper.searchArxiv"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -31,6 +32,10 @@
       {
         "command": "vaper.openPdf",
         "title": "Vaper: Open PDF"
+      },
+      {
+        "command": "vaper.searchArxiv",
+        "title": "Vaper: Search arXiv for Paper"
       }
     ],
     "customEditors": [
@@ -47,7 +52,8 @@
     ]
   },
   "scripts": {
-    "check": "node --check extension.js && node --check media/viewer.js",
+    "test": "node --test test/*.test.js",
+    "check": "node --check extension.js && node --check paper-search.js && node --check media/viewer.js && npm test",
     "package": "node scripts/package.js"
   },
   "dependencies": {
