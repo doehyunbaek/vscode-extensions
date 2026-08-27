@@ -4,7 +4,7 @@ A minimal PDF viewer for Visual Studio Code. Open any `.pdf` file normally, run 
 
 ## Features
 
-- Searches arXiv with **Vaper: Search arXiv for Paper**, using DBLP's fast CoRR index, and shows recently opened papers
+- Searches arXiv directly with **Vaper: Search arXiv for Paper** and shows recently opened papers
 - Opens PDFs in an editor tab
 - Page navigation and keyboard navigation
 - Fit-to-window and zoom controls

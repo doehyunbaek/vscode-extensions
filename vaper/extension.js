@@ -5,7 +5,7 @@ const {
   addRecentPaper,
   attachSearchPicker,
   normalizeRecentPapers,
-  searchDblpForArxiv
+  searchArxiv
 } = require('./paper-search');
 
 const VIEW_TYPE = 'vaper.pdfViewer';
@@ -176,17 +176,25 @@ async function runPaperSearch(context, output) {
   picker.title = 'Search arXiv for Paper';
   const recentPapers = normalizeRecentPapers(context.globalState.get(RECENT_PAPERS_KEY));
   picker.placeholder = recentPapers.length
-    ? 'Recently opened papers — type to search arXiv'
-    : 'Type a query to search arXiv';
+    ? 'Recently opened papers — type a query and press Enter to search arXiv'
+    : 'Type a query and press Enter to search arXiv';
   picker.matchOnDescription = true;
   picker.matchOnDetail = true;
   picker.ignoreFocusOut = true;
   const selected = await attachSearchPicker(
     picker,
-    (query, signal) => searchDblpForArxiv(query, {
-      signal,
-      log: message => output.appendLine(`[arXiv search] ${message}`)
-    }),
+    async (query, signal) => {
+      const started = performance.now();
+      output.appendLine(`[arXiv search] Searching for “${query}”…`);
+      const papers = await searchArxiv(query, { signal });
+      output.appendLine(`[arXiv search] Found ${papers.length} paper(s) in ${formatDuration(performance.now() - started)}`);
+      return papers.map(paper => ({
+        ...paper,
+        year: paper.published?.slice(0, 4),
+        venue: 'arXiv',
+        pdfUrl: `https://arxiv.org/pdf/${paper.id}`
+      }));
+    },
     { initialPapers: recentPapers }
   );
   if (!selected) return;

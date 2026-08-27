@@ -310,19 +310,25 @@ test('recent papers are shown initially and restored when the query is cleared',
   picker.hide();
 });
 
-test('search results update in the same visible picker', async () => {
+test('search is sent only after Enter and results update in the same visible picker', async () => {
   const picker = fakePicker();
   const paper = { title: 'Wasm-R3' };
+  const queries = [];
   const selected = attachSearchPicker(picker, async query => {
-    assert.equal(query, 'wasm-r3');
+    queries.push(query);
     return [paper];
-  }, { delay: 0 });
+  });
 
   picker.show();
+  picker.change('wasm');
   picker.change('wasm-r3');
   await flush();
+  assert.deepEqual(queries, []);
+
+  picker.accept();
   await flush();
 
+  assert.deepEqual(queries, ['wasm-r3']);
   assert.equal(picker.visible, true);
   assert.equal(picker.busy, false);
   assert.equal(picker.items[0].paper, paper);
@@ -331,17 +337,19 @@ test('search results update in the same visible picker', async () => {
   assert.equal(picker.visible, false);
 });
 
-test('a newer query replaces an older search without closing the picker', async () => {
+test('a query submitted with Enter replaces an older search without closing the picker', async () => {
   const picker = fakePicker();
   const pending = new Map();
   attachSearchPicker(picker, (query, signal) => new Promise(resolve => {
     pending.set(query, { resolve, signal });
-  }), { delay: 0 });
+  }));
 
   picker.show();
   picker.change('wasm');
+  picker.accept();
   await flush();
   picker.change('wasm-r3');
+  picker.accept();
   await flush();
 
   assert.equal(pending.get('wasm').signal.aborted, true);

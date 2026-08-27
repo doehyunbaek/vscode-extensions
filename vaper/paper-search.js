@@ -246,14 +246,13 @@ function paperItem(paper, recent = false) {
 }
 
 function attachSearchPicker(picker, search, options = {}) {
-  const delay = options.delay ?? 300;
   const toItem = options.toItem || paperItem;
   const initialPapers = options.initialPapers || [];
   const initialItems = initialPapers.map(paper => toItem(paper, true));
   picker.items = initialItems;
-  let timer;
   let controller;
   let requestId = 0;
+  let completedQuery;
   let selectedPaper;
   let settled = false;
 
@@ -261,52 +260,59 @@ function attachSearchPicker(picker, search, options = {}) {
     const finish = paper => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
       controller?.abort();
       resolve(paper);
     };
 
     picker.onDidChangeValue(value => {
-      clearTimeout(timer);
       controller?.abort();
-      const query = value.trim();
-      const currentRequest = ++requestId;
+      ++requestId;
+      completedQuery = undefined;
       picker.busy = false;
+      const query = value.trim();
       if (!query) {
         picker.items = initialItems;
         picker.placeholder = initialItems.length
-          ? 'Recently opened papers — type to search arXiv'
-          : 'Type a query to search arXiv';
+          ? 'Recently opened papers — type a query and press Enter to search arXiv'
+          : 'Type a query and press Enter to search arXiv';
         return;
       }
-
-      picker.placeholder = 'Searching arXiv…';
-      timer = setTimeout(async () => {
-        controller = new AbortController();
-        picker.busy = true;
-        try {
-          const papers = await search(query, controller.signal);
-          if (currentRequest !== requestId) return;
-          papers.sort((left, right) => Number(Boolean(right.pdfUrl)) - Number(Boolean(left.pdfUrl)));
-          picker.items = papers.length
-            ? papers.map(toItem)
-            : [{ label: 'No arXiv papers found', alwaysShow: true }];
-          picker.placeholder = papers.length ? 'Select a publication to open' : 'Try another query';
-        } catch (error) {
-          if (error?.name === 'AbortError' || currentRequest !== requestId) return;
-          picker.items = [{
-            label: '$(error) arXiv search failed',
-            detail: error instanceof Error ? error.message : String(error),
-            alwaysShow: true
-          }];
-          picker.placeholder = 'Edit the query to try again';
-        } finally {
-          if (currentRequest === requestId) picker.busy = false;
-        }
-      }, delay);
+      picker.placeholder = 'Press Enter to search arXiv';
     });
 
     picker.onDidAccept(() => {
+      const query = picker.value.trim();
+      if (query && query !== completedQuery) {
+        const currentRequest = ++requestId;
+        controller?.abort();
+        controller = new AbortController();
+        picker.busy = true;
+        picker.placeholder = 'Searching arXiv…';
+        void (async () => {
+          try {
+            const papers = await search(query, controller.signal);
+            if (currentRequest !== requestId) return;
+            papers.sort((left, right) => Number(Boolean(right.pdfUrl)) - Number(Boolean(left.pdfUrl)));
+            picker.items = papers.length
+              ? papers.map(toItem)
+              : [{ label: 'No arXiv papers found', alwaysShow: true }];
+            completedQuery = query;
+            picker.placeholder = papers.length ? 'Select a publication to open' : 'Edit the query and press Enter';
+          } catch (error) {
+            if (error?.name === 'AbortError' || currentRequest !== requestId) return;
+            picker.items = [{
+              label: '$(error) arXiv search failed',
+              detail: error instanceof Error ? error.message : String(error),
+              alwaysShow: true
+            }];
+            picker.placeholder = 'Press Enter to try again';
+          } finally {
+            if (currentRequest === requestId) picker.busy = false;
+          }
+        })();
+        return;
+      }
+
       const item = picker.selectedItems[0];
       if (!item?.paper) return;
       selectedPaper = item.paper;
